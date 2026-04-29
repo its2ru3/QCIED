@@ -1,0 +1,4 @@
+.git/
+.vscode/
+venv_btp/
+**/*__pycache__/

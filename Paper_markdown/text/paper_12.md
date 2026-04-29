@@ -1,0 +1,7 @@
+**Fig. 13** Quantum circuit and simplified diagram of edge gradient calculation
+
+Secondly, the gradient values obtained in each direction are used for bubble sorting to calculate the maximum value $G$ of the four directions. The maximum value can be obtained through the maximum value calculation module as shown in Fig. 10.
+
+Finally, edge pixel information can be obtained by comparing $G$ with the threshold $T = 2^{q-1}$. All pixel gradient values less than $T$ are preserved, and those exceeding $T$ are replaced with $T$, as shown in Fig. 11. Combining these steps can obtain the quantum circuit for the Sobel operator-based edge gradient calculation. The overall quantum circuit for color image edge detection can be achieved by subtracting the edge gradient from the prepared original image, as shown in Fig. 14.
+
+Figure 14 shows that 19 auxiliary qubits are used. During the image preparation process, four auxiliary qubits are needed. After the image preparation, the auxiliary qubits are set to zero using a reset gate, and these four auxiliary qubits can be repeatedly utilized later. In the subsequent gradient calculation process, eight auxiliary qubits are needed to encode eight quantum ternary adders. Another eight auxiliary qubits are required to encode eight quantum quaternary adders. In the second copy module, an additional auxiliary qubit is necessary to encode the copy bit to replicate the output of

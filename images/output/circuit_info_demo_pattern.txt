@@ -1,0 +1,5 @@
+qubits: 384
+depth: 2
+gates: 484
+image_size: 512x512
+color_depth: 8-bit
