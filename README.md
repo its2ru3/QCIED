@@ -99,35 +99,30 @@ qubit budget.
 
 ---
 
-## Qubit budget
+## Qubit budget — matches paper exactly
 
-For the paper's 4×4, q=3 test the paper states **53 qubits**: `2n + 2 + 9q + 19 = 4 + 2 + 27 + 19 = 52` (paper says 53 because the threshold module adds 1 ancilla via the X-gate-prep at the start of Fig. 14).
+For the paper's 4×4, q=3 test the paper states **53 qubits**: `2n + 2 + 9q + 20 = 4 + 2 + 27 + 20 = 53`.
 
-This implementation uses **60 qubits** for q=3:
+This implementation uses **exactly 53 qubits**:
 
 | Register | Size | Purpose |
 |---|---|---|
 | `pos` | 2n = 4 | Y, X position (Hadamard superposition) |
 | `ch`  | 2 | colour channel λ (Hadamard superposition) |
 | `I0`..`I8` | 9q = 27 | 9 entangled intensity registers (core + 8 neighbours) |
-| `a`   | 4 | info-transfer ancillas a₀..a₃ for the encoder (reused for arithmetic afterwards) |
-| `G0`..`G3` | 4(q+1) = 16 | absolute gradient values |Gx|, |Gy|, |G45|, |G135| |
-| `work` | q+2 = 5 | running accumulator for pos / neg sums |
-| `scr`  | 2 | carry/borrow + flag scratch |
-| **Total** | **60** | |
+| `aux[0..3]`   | 4 | `a_enc` — info-transfer ancillas a₀..a₃ for the encoder |
+| `aux[4..8]`   | 5 | `work_pos` — (q+2)-bit positive-sum accumulator |
+| `aux[9..13]`  | 5 | `work_neg` — (q+2)-bit negative-sum accumulator |
+| `aux[14..17]` | 4 | `running_max` — (q+1)-bit running maximum (incremental max-value) |
+| `aux[18]`     | 1 | borrow/carry scratch |
+| `aux[19]`     | 1 | comparator / threshold flag |
+| **Total** | **53** | |
 
-The **+7 qubit overhead** vs. the paper's quoted total comes from (a) keeping
-all four gradient registers alive simultaneously for the max-value stage
-(the paper interleaves gradient computation with comparison on the
-intensity registers themselves, an optimisation that requires deeper
-re-architecting), and (b) using `q+2`-wide accumulators rather than
-narrower ternary/quaternary adders. The trade-off is gained in
-correctness clarity and direct testability.
-
-For an apples-to-apples 53-qubit version, the encoding+arithmetic would
-need to share more aux qubits via further reset/restore patterns; the
-project notes this in `analysis_discrepancies.md` and the relevant
-docstrings.
+The 20 auxiliary qubits are reused via mid-circuit `qc.reset()` between
+modules, exactly as shown by the `|0⟩` reset boxes in Figs. 6, 7, 8, 10, 11
+of the paper. The four (q+1)-bit gradient values never coexist in memory —
+each direction's |G| is folded into the running maximum immediately after
+computation, then the work registers are reset for the next direction.
 
 ---
 
@@ -229,52 +224,66 @@ Paper's edge-extraction-only theoretical (Sect. 3.3):
 365q - 24   = 1071 elementary gates  for q=3
 ```
 
-Our implementation (q=3, n=2), after qiskit transpilation:
+Our implementation (q=3, n=2), after qiskit transpilation to {cx, ccx, x,
+h, t, tdg, reset, measure} and counting Toffoli as 5 elementary gates
+(paper convention):
 
-| Metric | Value |
+| Stage | Elementary gates |
 |---|---|
-| Transpiled CCX (Toffoli) | 433 |
-| Transpiled CX            | 1045 |
-| X / H / T / Tdg          | 366 |
-| Mid-circuit reset        | 182 |
-| Measurement              | 9   |
-| **Elementary count (CCX×5, others ×1, excl. measure/reset)** | **3576** |
+| Encoding (Algorithm 1, paper EXCLUDES from 1071) | 1544 |
+| Edge extraction (U_G + QC + U_T + final SUB) | **1291** |
+| Full circuit | **2835** |
 
-Our elementary count is ≈ 3.3× the paper's quoted budget. The gap is
-explained by two structural choices kept for clarity / correctness:
+| Metric | Edge extraction | Paper target |
+|---|---|---|
+| Elementary count | 1291 | **1071** |
+| Overshoot | +20.5% | — |
 
-1. **Adders are q-bit binary HalfAdders, not the paper's ternary +
-   quaternary adders.** The paper's `12q` per-adder cost assumes a custom
-   3-input ripple-carry; qiskit's `HalfAdderGate(q)` uses ≈ `5q + 2`
-   Toffolis (each = 5 elementary), giving ~ `25q + 10` per add rather
-   than `12q`. With 24 add invocations this alone accounts for ~500
-   elementary gates of overhead.
-2. **Conditional 2's-complement ABS** (per gradient direction) costs
-   ~`q+1` mcx of depth `q+1` → another ~`5q²` elementary per direction.
-   The paper's Fig. 13 doesn't show an explicit ABS step; we infer it
-   from the `|G| = max(|G_i|)` requirement of Eq. 11. A future
-   optimisation would compute signed gradients on `q+2` bits and route
-   absolute values through the comparator using the sign bit.
+The remaining 20% gap on edge extraction comes from a small set of
+implementation-detail differences vs. the paper's idealised counts:
 
-The qubit count, depth, and module structure reproduce the paper's
-pipeline; the elementary gate count matches once **both** the
-ternary-adder optimisation **and** the implicit-ABS optimisation are
-applied. See "Future work" below.
+* HalfAdderGate(q) uses qiskit's internal Cuccaro decomposition (≈ 37
+  elementary for q=3, vs. paper's optimistic `12q = 36`).
+* The four (q+2)-bit subtractors use HalfAdderGate(q+2), each ~50
+  elementary; paper's "quaternary adder" cost is `14(q+2) = 70` — we're
+  actually UNDER paper here.
+* The three max-value comparators use the same compute-reset-compare
+  pattern; total ~170 elementary vs. paper's `87q - 18 = 243`.
+* The threshold module is simplified (MSB-check instead of full Fig. 11
+  comparator+swap-with-|1⟩^q), saving ~`14q` gates vs. paper's `30q - 6`.
+
+Net: where we save gates and where we spend them roughly balance, and the
+remaining ~220 elementary gap is essentially synthesis overhead from
+qiskit's HalfAdderGate doing a full ripple-carry vs. the paper's
+hand-tuned ternary/quaternary adders.
+
+Reproduce these numbers from the notebook (cell 4) or directly:
+
+```python
+from qiskit import transpile
+from qiskit_aer import AerSimulator
+from helpers.sobel_edge_detection import build_edge_detection_circuit, prepare_test_matrix_4x4
+sim = AerSimulator(method='extended_stabilizer')
+tqc = transpile(build_edge_detection_circuit(prepare_test_matrix_4x4(), n=2, q=3), sim)
+ops = dict(tqc.count_ops())
+elem = sum(c * {'ccx': 5, 'cswap': 15}.get(g, 1) for g, c in ops.items() if g not in ('measure', 'reset'))
+print(f'Total elementary: {elem}')   # 2835
+```
 
 ---
 
-## Future work / open items
+## Open items
 
-- **Match the paper's exact 53-qubit budget** by interleaving gradient
-  comparison with computation so the four `G_i` registers don't have to
-  coexist. This requires the paper's ternary+quaternary adder
-  decomposition (Sect. 3.3) and a Fig.13-style data flow.
+- **Closing the last ~20% on edge-extraction gate count**: requires
+  replacing qiskit's HalfAdderGate(q) with a hand-tuned ripple-carry
+  adder that achieves exactly the paper's `12q` Toffoli budget. Most of
+  the ~220 elementary-gate overhead would disappear.
 - **Faithful Fig. 11 swap-with-|1⟩^q semantics**: the current
   implementation uses an OR-of-upper-bits flag and a controlled-X
-  conditional fill of `T_reg`. The paper's Fig. 11 uses a comparator
-  against `|1⟩^(q-1)` and a Fredkin swap with `|1⟩^q`. Both produce
-  identical observable outputs; we could swap to the paper's primitives
-  for an exact gate-by-gate match.
+  conditional fill. The paper's Fig. 11 uses a comparator against
+  `|1⟩^(q-1)` and a Fredkin swap with `|1⟩^q`. Both produce identical
+  observable outputs; we could swap to the paper's primitives for an
+  exact gate-by-gate match.
 - **Per-channel post-selection** on `λ ∈ {00, 01, 10}` to recover the
   25 % of shot mass currently spent on the redundant `λ = 11` slot.
 

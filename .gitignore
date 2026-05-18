@@ -2,9 +2,9 @@
 .vscode/
 .venv_btp/
 **/__pycache__/
-Elses/
-# Paper_markdown/
 .windsurf/
-why_differences.md
-helpers/ocqr_encoding_1.py
 .claude.md
+Elses/
+# Papers/
+Paper_markdown/
+why_differences.md
