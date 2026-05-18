@@ -20,7 +20,7 @@ Final gradient: G = max(|Gx|, |Gy|, |G45|, |G135|)
 
 import numpy as np
 from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister
-from .quantum_modules import (
+from .quantum_modules_old import (
     quantum_adder, quantum_subtractor, quantum_comparator,
     quantum_swap, quantum_cloning_module
 )
@@ -294,7 +294,7 @@ def encode_intensity_values(qc, rgb_matrix, n=2, q=3):
     
     # Encode the original image into I0 (central pixel)
     # For edge detection, we also need the 8 neighborhood images (I1-I8)
-    from helpers.ocqr_encoding import prepare_neighborhood_images
+    from helpers.ocqr_encoding_old import prepare_neighborhood_images
     neighborhoods = prepare_neighborhood_images(rgb_matrix)
     
     for img_idx, neighborhood in enumerate(neighborhoods):
@@ -435,7 +435,7 @@ def classical_edge_detection(rgb_matrix, threshold=None):
 
 if __name__ == "__main__":
     # Build and test the quantum edge detection circuit for 4x4 image
-    from helpers.ocqr_encoding import prepare_test_matrix_4x4
+    from helpers.ocqr_encoding_old import prepare_test_matrix_4x4
     
     print("=== Building Quantum Edge Detection Circuit ===")
     test_matrix = prepare_test_matrix_4x4()

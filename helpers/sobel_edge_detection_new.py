@@ -40,7 +40,7 @@ from qiskit import (
 )
 from qiskit.circuit.library import HalfAdderGate
 
-from .ocqr_encoding import (
+from .ocqr_encoding_new import (
     encode_ocqr_neighborhoods,
     prepare_neighborhood_images,
     prepare_test_matrix_4x4,

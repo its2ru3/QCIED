@@ -93,7 +93,7 @@ is used for the encoding's `a₀..a₃`. Worse, the encoding pass in
 `encode_intensity_values` ignores `aux` entirely.
 
 ### A.3 The 9 neighbors should be sourced from the encoding, not by classical
-       Python shift
+Python shift --> 
 
 `prepare_neighborhood_images` (`ocqr_encoding.py:190`) does a Python-side
 `np.roll`-style shift of the classical RGB matrix, then re-encodes each
